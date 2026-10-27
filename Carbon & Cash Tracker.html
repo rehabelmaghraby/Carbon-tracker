@@ -1,0 +1,601 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Carbon &amp; Cash Tracker</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800&family=IBM+Plex+Mono:wght@500&family=Source+Sans+3:wght@400;500;600&display=swap">
+<style>
+/* Layout concept: a phone-first daily ledger. Two meters (CO2e saved, EGP saved) sit above
+   every view; below them, habits you tick each day, a month calendar, and a six-month chart. */
+:root{
+  --bg:#EDF3F0; --surface:#FAFCFB; --fg:#12211C; --muted:#52665D; --line:#C9D7D1;
+  --co2:#167A5B; --co2-bg:#D8EFE5; --egp:#9A5B00; --egp-bg:#F5E6C6;
+  --accent:#167A5B; --accent-fg:#FFFFFF; --warn:#B3401C; --warn-bg:#F7DED5;
+  --f-display:"Archivo","Arial Narrow",Arial,sans-serif;
+  --f-body:"Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0D1A16; --surface:#14261F; --fg:#E3EFEA; --muted:#93A9A0; --line:#27423A;
+    --co2:#4CC9A0; --co2-bg:#12382B; --egp:#E8B04A; --egp-bg:#3A2D10;
+    --accent:#4CC9A0; --accent-fg:#04150F; --warn:#F0875E; --warn-bg:#3A1F16; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0D1A16; --surface:#14261F; --fg:#E3EFEA; --muted:#93A9A0; --line:#27423A;
+  --co2:#4CC9A0; --co2-bg:#12382B; --egp:#E8B04A; --egp-bg:#3A2D10;
+  --accent:#4CC9A0; --accent-fg:#04150F; --warn:#F0875E; --warn-bg:#3A1F16; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--bg); color:var(--fg); font-family:var(--f-body); font-size:17px; line-height:1.45;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+  padding-block:0 96px;
+}
+.wrap{max-width:760px;margin:0 auto}
+button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+h1,h2,h3{font-family:var(--f-display);margin:0;line-height:1.05;text-wrap:balance}
+h2{font-size:1.5rem;font-weight:800;letter-spacing:.005em}
+h3{font-size:1.05rem;font-weight:800}
+.muted{color:var(--muted)}
+.small{font-size:.86rem}
+
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:14px 8px}
+.brand{display:flex;align-items:center;gap:10px}
+.mark{width:34px;height:34px;flex:none}
+.brand b{font-family:var(--f-display);font-weight:800;font-size:1.25rem;letter-spacing:.01em;display:block;line-height:1}
+.brand span{font-size:.76rem;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.streak{font-family:var(--f-mono);font-size:.85rem;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 12px;white-space:nowrap}
+
+.demo{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;justify-content:space-between;background:var(--egp-bg);border:1px solid var(--egp);border-radius:8px;padding:10px 14px;margin:6px 0 12px;font-size:.95rem}
+.btn{border:0;background:var(--accent);color:var(--accent-fg);padding:10px 18px;border-radius:8px;font-weight:600}
+.btn.alt{background:transparent;color:var(--fg);border:1px solid var(--line)}
+.btn.warn{background:var(--warn);color:#fff}
+.btn:disabled{opacity:.5;cursor:default}
+
+.datebar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:6px 0 12px}
+.datebar h2{font-size:1.4rem}
+.iconbtn{width:44px;height:44px;border-radius:8px;border:1px solid var(--line);background:var(--surface);font-size:1.2rem;display:grid;place-items:center}
+.today-pill{font-size:.8rem;font-family:var(--f-mono);color:var(--accent);margin-left:6px}
+
+.meters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.meter{border-radius:10px;padding:14px 16px;min-width:0}
+.meter.co2{background:var(--co2-bg);border:1px solid var(--co2)}
+.meter.egp{background:var(--egp-bg);border:1px solid var(--egp)}
+.meter .lab{font-size:.74rem;letter-spacing:.07em;text-transform:uppercase;font-weight:600}
+.meter.co2 .lab,.meter.co2 .num{color:var(--co2)}
+.meter.egp .lab,.meter.egp .num{color:var(--egp)}
+.meter .num{font-family:var(--f-mono);font-size:2.1rem;line-height:1.1;font-weight:500;overflow-wrap:anywhere}
+.meter .unit{font-size:.9rem;color:var(--fg);opacity:.85}
+
+.goal{margin-top:12px;display:grid;gap:10px}
+.goalrow .gh{display:flex;justify-content:space-between;gap:10px;font-size:.86rem;margin-bottom:4px}
+.bar{height:10px;background:var(--line);border-radius:999px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:999px;transition:width .5s}
+.bar i.co2{background:var(--co2)} .bar i.egp{background:var(--egp)}
+
+.focus{margin:14px 0 4px;border-left:4px solid var(--accent);padding:4px 0 4px 12px}
+.focus .k{font-family:var(--f-mono);font-size:.78rem;color:var(--accent);letter-spacing:.06em;text-transform:uppercase}
+.focus .t{font-family:var(--f-display);font-weight:800;font-size:1.2rem}
+
+.group{margin-top:18px}
+.group>h3{margin-bottom:8px;font-size:.8rem;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-family:var(--f-mono);font-weight:500}
+.rows{display:grid;gap:8px}
+.row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.row.on{border-color:var(--co2)}
+.row .txt b{font-weight:600;display:block}
+.row .txt span{font-size:.86rem;color:var(--muted)}
+.tag{display:inline-block;font-family:var(--f-mono);font-size:.68rem;letter-spacing:.05em;text-transform:uppercase;background:var(--accent);color:var(--accent-fg);border-radius:4px;padding:1px 6px;margin-left:6px;vertical-align:2px}
+.sv{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:6px 14px;font-family:var(--f-mono);font-size:.86rem}
+.sv .k{color:var(--co2)} .sv .e{color:var(--egp)} .sv .none{color:var(--muted)}
+.switch{position:relative;width:52px;height:30px;flex:none}
+.switch input{position:absolute;inset:0;width:100%;height:100%;opacity:0;margin:0;cursor:pointer}
+.switch i{position:absolute;inset:0;border-radius:999px;background:var(--line);transition:background .2s;pointer-events:none}
+.switch i::after{content:"";position:absolute;left:3px;top:3px;width:24px;height:24px;border-radius:50%;background:var(--surface);transition:transform .2s}
+.switch input:checked+i{background:var(--co2)}
+.switch input:checked+i::after{transform:translateX(22px)}
+.switch input:focus-visible+i{outline:3px solid var(--accent);outline-offset:2px}
+.step{display:flex;align-items:center;gap:6px}
+.step button{width:40px;height:40px;border-radius:8px;border:1px solid var(--line);background:var(--bg);font-size:1.2rem;font-weight:600}
+.step output{min-width:42px;text-align:center;font-family:var(--f-mono);font-size:1.1rem}
+.field{display:flex;flex-wrap:wrap;gap:8px;align-items:center;grid-column:1 / -1}
+.field select,.field input[type=number],.input{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:9px 10px;min-height:42px}
+.field input[type=number]{width:96px}
+.field label{font-size:.84rem;color:var(--muted)}
+
+/* month */
+.mhead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:6px 0 12px}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;margin-top:12px}
+.cal .dow{font-family:var(--f-mono);font-size:.7rem;text-align:center;color:var(--muted);text-transform:uppercase;padding-bottom:2px}
+.day{aspect-ratio:1/1;border:1px solid var(--line);border-radius:8px;background:var(--surface);display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;padding:4px 5px;text-align:left;min-width:0;overflow:hidden}
+.day .d{font-size:.82rem;font-weight:600}
+.day .v{font-family:var(--f-mono);font-size:.64rem;align-self:flex-end;line-height:1}
+.day.l1{background:color-mix(in srgb, var(--co2) 14%, var(--surface))}
+.day.l2{background:color-mix(in srgb, var(--co2) 30%, var(--surface))}
+.day.l3{background:color-mix(in srgb, var(--co2) 50%, var(--surface))}
+.day.l4{background:color-mix(in srgb, var(--co2) 72%, var(--surface));color:var(--accent-fg)}
+.day.today{outline:2px solid var(--fg);outline-offset:1px}
+.day.empty{visibility:hidden}
+.legend{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:.78rem;color:var(--muted)}
+.legend i{width:16px;height:16px;border-radius:4px;border:1px solid var(--line);display:inline-block}
+
+/* progress */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-top:12px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:transparent;padding:8px 14px;font-weight:600}
+.seg button[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
+svg.chart{width:100%;height:auto;display:block}
+.chart text{font-family:var(--f-mono);font-size:10px;fill:var(--muted)}
+.chart .bar-co2{fill:var(--co2)} .chart .bar-egp{fill:var(--egp)}
+.chart .grid{stroke:var(--line);stroke-width:1}
+.chart .goalline{stroke:var(--fg);stroke-width:1.5;stroke-dasharray:4 3}
+.plan{display:grid;gap:8px;margin-top:10px}
+.pm{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--surface)}
+.pm.now{border-color:var(--accent)}
+.pm .n{font-family:var(--f-display);font-weight:800;font-size:1.6rem;width:34px;text-align:center;color:var(--accent)}
+.pm b{display:block;font-weight:600}
+.pm .nums{font-family:var(--f-mono);font-size:.8rem;color:var(--muted)}
+.eq{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}
+.eq div{border:1px dashed var(--line);border-radius:8px;padding:10px 12px}
+.eq .big{font-family:var(--f-mono);font-size:1.25rem}
+
+/* more */
+.form{display:grid;gap:12px;margin-top:10px}
+.form .fr{display:grid;gap:4px}
+.form label{font-size:.86rem;color:var(--muted);font-weight:600}
+.form .input{width:100%}
+textarea.input{min-height:96px;font-family:var(--f-mono);font-size:.78rem;resize:vertical}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.notice{border-radius:8px;padding:10px 12px;margin-top:10px;font-size:.92rem;border:1px solid var(--line);background:var(--surface)}
+.notice.bad{background:var(--warn-bg);border-color:var(--warn)}
+.notice.good{background:var(--co2-bg);border-color:var(--co2)}
+
+/* tabs */
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+  padding:6px max(10px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(10px, env(safe-area-inset-left, 0px))}
+.tabs button{border:0;background:transparent;padding:8px 4px;border-radius:8px;font-weight:600;font-size:.82rem;color:var(--muted);display:grid;gap:2px;justify-items:center}
+.tabs button svg{width:22px;height:22px}
+.tabs button[aria-current="page"]{color:var(--accent);background:color-mix(in srgb, var(--accent) 12%, transparent)}
+
+@media (max-width:420px){
+  .meter .num{font-size:1.7rem}
+  .eq{grid-template-columns:minmax(0,1fr)}
+  .two{grid-template-columns:minmax(0,1fr)}
+}
+@media (min-width:760px){
+  body{font-size:18px}
+  .day .v{font-size:.72rem}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 34 34" aria-hidden="true">
+        <circle cx="13" cy="17" r="11" fill="var(--co2)" opacity=".85"/>
+        <circle cx="21" cy="17" r="11" fill="var(--egp)" opacity=".85"/>
+      </svg>
+      <div><b>Carbon &amp; Cash</b><span>Daily tracker</span></div>
+    </div>
+    <div class="streak" id="streak" aria-live="polite"></div>
+  </header>
+  <main id="app" aria-live="polite"></main>
+</div>
+<nav class="tabs" aria-label="Sections" id="tabs"></nav>
+
+<script>
+(function(){
+  /* ---------- constants (from the Heliopolis University 6-month plan) ---------- */
+  var KEY = 'carbon-cash-tracker.v1';
+  var C = { sheetKg:0.005, sheetEgp:0.57, beefKg:3.55, beefEgp:57.5, bottleKg:0.1, bottleEgp:7, flightKgKm:0.15,
+            ledKwh:0.82, standbyKwh:0.32, acKwh:0.67, smooth:0.05, co2L:2.31 };
+  var TRACKS = {
+    studentNoCar:{ label:'Student, no private car', kg:45, egp:630 },
+    studentCar:{ label:'Student who drives', kg:87, egp:1035 },
+    academic:{ label:'Academic', kg:113, egp:1287 }
+  };
+  var METHODS = [
+    { id:'', label:'No trip today', f:0 },
+    { id:'carpool2', label:'Carpool of 2 (saves half)', f:0.5 },
+    { id:'carpool3', label:'Carpool of 3 (saves two thirds)', f:2/3 },
+    { id:'carpool4', label:'Carpool of 4 (saves three quarters)', f:0.75 },
+    { id:'transit', label:'Shuttle, bus or metro (estimate)', f:0.8 },
+    { id:'home', label:'Worked or studied from home', f:1 }
+  ];
+  var THEMES = [
+    ['Measure and quick wins', 'Light bulbs, standby power and a reusable bottle.'],
+    ['Print less, learn digital', 'Cut printed sheets and share files online.'],
+    ['Getting to campus', 'Carpool, share rides, or move a day online.'],
+    ['Food and water', 'Bean meals instead of beef, and refill your bottle.'],
+    ['Lead your circle', 'Bring friends in. Choose online for one trip or conference.'],
+    ['Cool smarter and review', 'Air-conditioner at 26°C, then compare with Month 1.']
+  ];
+  var HAB = [
+    { g:'Home and campus energy', id:'led', type:'toggle', name:'LED lights only', sub:'About 0.8 kWh saved (5 bulbs, 4 hours)', focus:[1] },
+    { g:'Home and campus energy', id:'standby', type:'toggle', name:'Switched off standby power', sub:'Chargers, TV and screens at the wall', focus:[1] },
+    { g:'Home and campus energy', id:'ac', type:'toggle', name:'A/C at 26°C instead of 24°C', sub:'On days you use cooling', focus:[6] },
+    { g:'Home and campus energy', id:'kwh', type:'num', name:'Other electricity saved (kWh)', sub:'From a switched-off device or a lower bill', focus:[6], step:0.1 },
+    { g:'Getting around', id:'trip', type:'trip', name:'Shared ride or trip avoided', sub:'Enter your round trip in km', focus:[3,5] },
+    { g:'Getting around', id:'smooth', type:'toggle', name:'Smooth driving, tires checked', sub:'About 5% less fuel on driving you still do', focus:[3] },
+    { g:'Getting around', id:'flight', type:'flight', name:'Flight avoided', sub:'Km of the round trip, and the ticket money you did not spend', focus:[5] },
+    { g:'Paper, food and water', id:'sheets', type:'count', name:'Sheets of paper not printed', sub:'Double-sided or digital instead', focus:[2], step:10 },
+    { g:'Paper, food and water', id:'beef', type:'count', name:'Beef-free meals', sub:'A bean or lentil meal instead of 150 g beef', focus:[4], step:1 },
+    { g:'Paper, food and water', id:'bottles', type:'count', name:'Bottles skipped', sub:'Refilled your own bottle instead', focus:[1,4], step:1 }
+  ];
+
+  /* ---------- state ---------- */
+  var S = null, D = null, memOnly = false, ui = { tab:'today', sel:null, month:null, metric:'co2', msg:'', confirm:'' };
+  function defaults(){
+    return { track:'studentNoCar', planStart:'2026-11-01', elec:1.95, petrol:22.25, lper100:8.5, grid:0.442, tripKm:40,
+             goalKg:TRACKS.studentNoCar.kg, goalEgp:TRACKS.studentNoCar.egp };
+  }
+  function load(){
+    var raw = null;
+    try { raw = localStorage.getItem(KEY); } catch(e){ memOnly = true; }
+    var st = null;
+    if(raw){ try { st = JSON.parse(raw); } catch(e){ st = null; } }
+    if(st && st.S && st.D){ S = Object.assign(defaults(), st.S); D = st.D; ui.demo = !!st.demo; }
+    else { S = defaults(); D = makeExample(); ui.demo = true; save(); }
+  }
+  function save(){
+    if(memOnly) return;
+    try { localStorage.setItem(KEY, JSON.stringify({ v:1, S:S, D:D, demo:ui.demo })); } catch(e){ memOnly = true; }
+  }
+
+  /* ---------- dates ---------- */
+  function pad(n){ return (n<10?'0':'')+n; }
+  function keyOf(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+  function parse(k){ var a = k.split('-'); return new Date(+a[0], +a[1]-1, +a[2]); }
+  function todayKey(){ return keyOf(new Date()); }
+  function addDays(k, n){ var d = parse(k); d.setDate(d.getDate()+n); return keyOf(d); }
+  function monthOf(k){ return k.slice(0,7); }
+  function addMonths(m, n){ var a = m.split('-'); var d = new Date(+a[0], +a[1]-1+n, 1); return d.getFullYear()+'-'+pad(d.getMonth()+1); }
+  function daysIn(m){ var a = m.split('-'); return new Date(+a[0], +a[1], 0).getDate(); }
+  function monthsBetween(a, b){ var x = a.split('-'), y = b.split('-'); return (+y[0]-+x[0])*12 + (+y[1]-+x[1]); }
+  var MN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var DN = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  function monthLabel(m){ var a = m.split('-'); return MN[+a[1]-1]+' '+a[0]; }
+  function monthShort(m){ return MN[+m.split('-')[1]-1].slice(0,3); }
+  function dateLabel(k){ var d = parse(k); return DN[d.getDay()]+' '+d.getDate()+' '+MN[d.getMonth()]; }
+
+  /* ---------- calculations ---------- */
+  function kmKg(){ return C.co2L * S.lper100 / 100; }
+  function kmEgp(){ return S.petrol * S.lper100 / 100; }
+  function num(x){ x = +x; return isFinite(x) && x > 0 ? x : 0; }
+  function methodOf(id){ for(var i=0;i<METHODS.length;i++) if(METHODS[i].id===id) return METHODS[i]; return METHODS[0]; }
+  function parts(day){
+    var o = {}, d = day || {};
+    var kwh = (d.led?C.ledKwh:0) + (d.standby?C.standbyKwh:0) + (d.ac?C.acKwh:0);
+    o.led = { kg:(d.led?C.ledKwh:0)*S.grid, egp:(d.led?C.ledKwh:0)*S.elec };
+    o.standby = { kg:(d.standby?C.standbyKwh:0)*S.grid, egp:(d.standby?C.standbyKwh:0)*S.elec };
+    o.ac = { kg:(d.ac?C.acKwh:0)*S.grid, egp:(d.ac?C.acKwh:0)*S.elec };
+    o.kwh = { kg:num(d.kwh)*S.grid, egp:num(d.kwh)*S.elec };
+    var trip = d.trip && d.trip.m ? d.trip : null, f = trip ? methodOf(trip.m).f : 0, tkm = trip ? num(trip.km) : 0;
+    var avoided = tkm * f;
+    o.trip = { kg:avoided*kmKg(), egp:avoided*kmEgp() };
+    var base = trip ? tkm*(1-f) : S.tripKm;
+    var sm = d.smooth ? base*C.smooth : 0;
+    o.smooth = { kg:sm*kmKg(), egp:sm*kmEgp() };
+    o.flight = { kg:num(d.flightKm)*C.flightKgKm, egp:num(d.flightEgp) };
+    o.sheets = { kg:num(d.sheets)*C.sheetKg, egp:num(d.sheets)*C.sheetEgp };
+    o.beef = { kg:num(d.beef)*C.beefKg, egp:num(d.beef)*C.beefEgp };
+    o.bottles = { kg:num(d.bottles)*C.bottleKg, egp:num(d.bottles)*C.bottleEgp };
+    var kg = 0, egp = 0; for(var k in o){ kg += o[k].kg; egp += o[k].egp; }
+    o.total = { kg:kg, egp:egp };
+    return o;
+  }
+  function dayTotal(k){ return parts(D[k]).total; }
+  function monthTotal(m){
+    var kg = 0, egp = 0, n = daysIn(m), logged = 0;
+    for(var i=1;i<=n;i++){ var k = m+'-'+pad(i); if(D[k]){ var t = dayTotal(k); kg += t.kg; egp += t.egp; if(t.kg>0||t.egp>0) logged++; } }
+    return { kg:kg, egp:egp, days:logged };
+  }
+  function allTotal(){
+    var kg = 0, egp = 0, n = 0;
+    for(var k in D){ var t = dayTotal(k); kg += t.kg; egp += t.egp; if(t.kg>0||t.egp>0) n++; }
+    return { kg:kg, egp:egp, days:n };
+  }
+  function streak(){
+    var t = todayKey(), k = t, n = 0;
+    var tt = D[t] ? dayTotal(t) : null;
+    if(!(tt && (tt.kg>0||tt.egp>0))) k = addDays(t, -1);
+    for(var i=0;i<4000;i++){
+      var d = D[k]; if(!d) break; var x = dayTotal(k); if(!(x.kg>0||x.egp>0)) break; n++; k = addDays(k, -1);
+    }
+    return n;
+  }
+  function planIndex(){ // 0..5 plus before/after flags
+    var diff = monthsBetween(monthOf(S.planStart), monthOf(todayKey()));
+    return { i:Math.max(0, Math.min(5, diff)), before:diff<0, after:diff>5, diff:diff };
+  }
+
+  /* ---------- formatting ---------- */
+  function fk(x){ x = x||0; if(x<=0) return '0'; if(x<1) return x.toFixed(2); if(x<100) return x.toFixed(1); return Math.round(x).toLocaleString('en-US'); }
+  function fe(x){ x = x||0; if(x<=0) return '0'; if(x<10) return x.toFixed(1); return Math.round(x).toLocaleString('en-US'); }
+  function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  /* ---------- example data ---------- */
+  function makeExample(){
+    var out = {}, t = todayKey();
+    for(var i=1;i<=12;i++){
+      var k = addDays(t, -i), r = (i*7+3)%5, d = parse(k).getDay(), wk = d!==5 && d!==6;
+      var o = { ex:true, led:true, standby:r!==0, bottles:1+(r%3) };
+      if(wk){ o.trip = { m:(r%2?'carpool4':'carpool2'), km:40 }; o.sheets = 10*(1+r); }
+      if(r===2||r===4) o.beef = 1;
+      if(i===5) o.trip = { m:'home', km:40 };
+      if(i===9) o.ac = true;
+      out[k] = o;
+    }
+    return out;
+  }
+
+  /* ---------- rendering ---------- */
+  var ICON = {
+    today:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+    month:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
+    progress:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
+    more:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></svg>'
+  };
+  function tabsHTML(){
+    var t = [['today','Today'],['month','Month'],['progress','Progress'],['more','More']];
+    return t.map(function(x){ return '<button data-act="tab" data-v="'+x[0]+'"'+(ui.tab===x[0]?' aria-current="page"':'')+'>'+ICON[x[0]]+'<span>'+x[1]+'</span></button>'; }).join('');
+  }
+  function demoBanner(){
+    if(!ui.demo) return '';
+    return '<div class="demo"><span><b>Example days.</b> The last 12 days are made up so you can see how it works.</span><button class="btn" data-act="startOwn">Start my own log</button></div>';
+  }
+  function meters(kg, egp, label){
+    return '<div class="meters">' +
+      '<div class="meter co2"><div class="lab">CO₂e saved '+label+'</div><div class="num" id="m-kg">'+fk(kg)+'</div><div class="unit">kg</div></div>' +
+      '<div class="meter egp"><div class="lab">Money saved '+label+'</div><div class="num" id="m-egp">'+fe(egp)+'</div><div class="unit">EGP</div></div></div>';
+  }
+  function goalBars(mt, label){
+    var pk = S.goalKg>0 ? Math.min(100, mt.kg/S.goalKg*100) : 0, pe = S.goalEgp>0 ? Math.min(100, mt.egp/S.goalEgp*100) : 0;
+    return '<div class="goal"><div class="goalrow"><div class="gh"><span>CO₂e this month</span><span class="mono">'+fk(mt.kg)+' of '+fk(S.goalKg)+' kg</span></div><div class="bar"><i class="co2" style="width:'+pk.toFixed(1)+'%"></i></div></div>' +
+      '<div class="goalrow"><div class="gh"><span>Money this month</span><span class="mono">EGP '+fe(mt.egp)+' of '+fe(S.goalEgp)+'</span></div><div class="bar"><i class="egp" style="width:'+pe.toFixed(1)+'%"></i></div></div></div>';
+  }
+  function svText(p){
+    if(p.kg<=0 && p.egp<=0) return '<span class="none">Nothing logged</span>';
+    return '<span class="k">+'+fk(p.kg)+' kg CO₂e</span><span class="e">+EGP '+fe(p.egp)+'</span>';
+  }
+  function rowHTML(h, day, P, pi){
+    var d = day || {}, on = P[h.id].kg>0 || P[h.id].egp>0;
+    var focus = h.focus.indexOf(pi.i+1)>-1 && !pi.after ? '<span class="tag">Focus</span>' : '';
+    var head = '<div class="txt"><b>'+esc(h.name)+focus+'</b><span>'+esc(h.sub)+'</span></div>';
+    var ctl = '', extra = '';
+    if(h.type==='toggle'){
+      ctl = '<span class="switch"><input type="checkbox" role="switch" aria-label="'+esc(h.name)+'" data-field="'+h.id+'"'+(d[h.id]?' checked':'')+'><i></i></span>';
+    } else if(h.type==='count'){
+      ctl = '<div class="step"><button data-act="dec" data-id="'+h.id+'" aria-label="Less">−</button><output class="mono">'+(num(d[h.id])||0)+'</output><button data-act="inc" data-id="'+h.id+'" aria-label="More">+</button></div>';
+    } else if(h.type==='num'){
+      extra = '<div class="field"><label for="f-'+h.id+'">kWh</label><input class="input" id="f-'+h.id+'" type="number" inputmode="decimal" min="0" step="0.1" data-field="'+h.id+'" value="'+(d[h.id]?esc(d[h.id]):'')+'" placeholder="0"></div>';
+    } else if(h.type==='trip'){
+      var tr = d.trip || { m:'', km:S.tripKm };
+      extra = '<div class="field"><label for="f-trip-m" class="small">How</label><select id="f-trip-m" data-field="tripm">' +
+        METHODS.map(function(m){ return '<option value="'+m.id+'"'+(m.id===tr.m?' selected':'')+'>'+esc(m.label)+'</option>'; }).join('') +
+        '</select><label for="f-trip-km">Round trip km</label><input class="input" id="f-trip-km" type="number" inputmode="decimal" min="0" step="1" data-field="tripkm" value="'+esc(tr.km!=null?tr.km:S.tripKm)+'"></div>';
+    } else if(h.type==='flight'){
+      extra = '<div class="field"><label for="f-fkm">Flight km avoided</label><input class="input" id="f-fkm" type="number" inputmode="decimal" min="0" step="100" data-field="flightKm" value="'+(d.flightKm?esc(d.flightKm):'')+'" placeholder="0">' +
+        '<label for="f-fegp">Ticket EGP saved</label><input class="input" id="f-fegp" type="number" inputmode="decimal" min="0" step="100" data-field="flightEgp" value="'+(d.flightEgp?esc(d.flightEgp):'')+'" placeholder="0"></div>';
+    }
+    return '<div class="row'+(on?' on':'')+'" data-row="'+h.id+'">'+head+ctl+extra+'<div class="sv" data-sv="'+h.id+'">'+svText(P[h.id])+'</div></div>';
+  }
+  function renderToday(){
+    var k = ui.sel || todayKey(), day = D[k], P = parts(day), pi = planIndex();
+    var mt = monthTotal(monthOf(k)), isToday = k===todayKey();
+    var th = THEMES[pi.i];
+    var planLine = pi.before ? 'Your plan starts in '+monthLabel(monthOf(S.planStart))+'. Month 1 is a good warm-up.' : (pi.after ? 'You have finished the six months. Keep the habits that worked.' : 'Month '+(pi.i+1)+' of 6');
+    var h = demoBanner();
+    h += '<div class="datebar"><button class="iconbtn" data-act="prev" aria-label="Previous day">‹</button><div style="text-align:center"><h2>'+esc(dateLabel(k))+'</h2>'+(isToday?'<span class="today-pill">TODAY</span>':'<button class="btn alt" data-act="gotoday" style="margin-top:6px;padding:6px 12px">Back to today</button>')+'</div><button class="iconbtn" data-act="next" aria-label="Next day">›</button></div>';
+    h += meters(P.total.kg, P.total.egp, 'this day');
+    h += goalBars(mt);
+    h += '<div class="focus"><div class="k">'+esc(planLine)+'</div><div class="t">'+esc(th[0])+'</div><div class="muted small">'+esc(th[1])+'</div></div>';
+    var groups = [], seen = {};
+    HAB.forEach(function(x){ if(!seen[x.g]){ seen[x.g] = []; groups.push(x.g); } seen[x.g].push(x); });
+    groups.forEach(function(g){
+      h += '<section class="group"><h3>'+esc(g)+'</h3><div class="rows">'+seen[g].map(function(x){ return rowHTML(x, day, P, pi); }).join('')+'</div></section>';
+    });
+    h += '<p class="muted small" style="margin-top:18px">Savings are estimates from the Heliopolis University plan. Change the prices and factors under More.</p>';
+    return h;
+  }
+  function renderMonth(){
+    var m = ui.month || monthOf(ui.sel || todayKey()), mt = monthTotal(m), n = daysIn(m);
+    var first = parse(m+'-01').getDay(); // 0 Sunday
+    var offset = (first + 1) % 7;        // week starts on Saturday
+    var dow = ['Sat','Sun','Mon','Tue','Wed','Thu','Fri'];
+    var dailyGoal = S.goalKg>0 ? S.goalKg/30 : 1, cells = '';
+    dow.forEach(function(x){ cells += '<div class="dow">'+x+'</div>'; });
+    for(var e=0;e<offset;e++) cells += '<div class="day empty"></div>';
+    var best = null, tk = todayKey();
+    for(var i=1;i<=n;i++){
+      var k = m+'-'+pad(i), t = dayTotal(k), lvl = 0;
+      if(t.kg>0){ var r = t.kg/dailyGoal; lvl = r<0.5?1:(r<1?2:(r<1.6?3:4)); }
+      if(t.kg>0 && (!best || t.kg>best.kg)) best = { k:k, kg:t.kg };
+      cells += '<button class="day'+(lvl?' l'+lvl:'')+(k===tk?' today':'')+'" data-act="pickday" data-v="'+k+'" aria-label="'+esc(dateLabel(k))+', '+fk(t.kg)+' kg CO2e saved"><span class="d">'+i+'</span><span class="v">'+(t.kg>0?fk(t.kg):'')+'</span></button>';
+    }
+    var h = demoBanner();
+    h += '<div class="mhead"><button class="iconbtn" data-act="pm" aria-label="Previous month">‹</button><h2>'+esc(monthLabel(m))+'</h2><button class="iconbtn" data-act="nm" aria-label="Next month">›</button></div>';
+    h += meters(mt.kg, mt.egp, 'this month');
+    h += goalBars(mt);
+    h += '<p class="muted small" style="margin:10px 0 0">'+mt.days+' day'+(mt.days===1?'':'s')+' logged'+(best?'. Best day: '+esc(dateLabel(best.k))+', '+fk(best.kg)+' kg.':'.')+'</p>';
+    h += '<div class="cal" role="group" aria-label="Calendar">'+cells+'</div>';
+    h += '<div class="legend"><span>Less</span><i style="background:var(--surface)"></i><i style="background:color-mix(in srgb, var(--co2) 14%, var(--surface))"></i><i style="background:color-mix(in srgb, var(--co2) 30%, var(--surface))"></i><i style="background:color-mix(in srgb, var(--co2) 50%, var(--surface))"></i><i style="background:color-mix(in srgb, var(--co2) 72%, var(--surface))"></i><span>More. Tap a day to edit it.</span></div>';
+    return h;
+  }
+  function niceMax(v){ if(v<=0) return 10; var p = Math.pow(10, Math.floor(Math.log(v)/Math.LN10)), f = v/p; var n = f<=1?1:(f<=2?2:(f<=5?5:10)); return n*p; }
+  function chartSVG(months, metric){
+    var vals = months.map(function(m){ return metric==='co2' ? monthTotal(m).kg : monthTotal(m).egp; });
+    var goal = metric==='co2' ? S.goalKg : S.goalEgp;
+    var max = niceMax(Math.max.apply(null, vals.concat([goal, 1]))*1.05);
+    var W = 360, H = 210, L = 44, R = 8, T = 10, B = 28, iw = W-L-R, ih = H-T-B, bw = iw/months.length*0.6, g = '';
+    [0, 0.5, 1].forEach(function(f){
+      var y = T + ih - f*ih, v = max*f;
+      g += '<line class="grid" x1="'+L+'" x2="'+(W-R)+'" y1="'+y+'" y2="'+y+'"/><text x="'+(L-6)+'" y="'+(y+3)+'" text-anchor="end">'+(metric==='co2'?fk(v):fe(v))+'</text>';
+    });
+    months.forEach(function(m, i){
+      var cx = L + iw/months.length*(i+0.5), h = vals[i]/max*ih, y = T+ih-h;
+      g += '<rect class="bar-'+metric+'" x="'+(cx-bw/2)+'" y="'+y+'" width="'+bw+'" height="'+Math.max(h,0)+'" rx="3"/>';
+      if(vals[i]>0) g += '<text x="'+cx+'" y="'+(y-4)+'" text-anchor="middle">'+(metric==='co2'?fk(vals[i]):fe(vals[i]))+'</text>';
+      g += '<text x="'+cx+'" y="'+(H-10)+'" text-anchor="middle">'+monthShort(m)+'</text>';
+    });
+    var gy = T + ih - Math.min(goal, max)/max*ih;
+    g += '<line class="goalline" x1="'+L+'" x2="'+(W-R)+'" y1="'+gy+'" y2="'+gy+'"/>';
+    return '<svg class="chart" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Monthly '+(metric==='co2'?'CO2e saved in kilograms':'money saved in EGP')+' for the six plan months, with the monthly goal as a dashed line">'+g+'</svg>';
+  }
+  function renderProgress(){
+    var start = monthOf(S.planStart), months = []; for(var i=0;i<6;i++) months.push(addMonths(start, i));
+    var pi = planIndex(), tot = allTotal(), pl = { kg:0, egp:0 };
+    months.forEach(function(m){ var t = monthTotal(m); pl.kg += t.kg; pl.egp += t.egp; });
+    var h = demoBanner();
+    h += '<h2 style="margin:8px 0 10px">Your six months</h2>';
+    h += meters(pl.kg, pl.egp, 'in the plan');
+    h += '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h3>Month by month</h3><div class="seg" role="group" aria-label="Chart metric"><button data-act="metric" data-v="co2" aria-pressed="'+(ui.metric==='co2')+'">CO₂e kg</button><button data-act="metric" data-v="egp" aria-pressed="'+(ui.metric==='egp')+'">EGP</button></div></div>'+chartSVG(months, ui.metric)+'<p class="muted small" style="margin:6px 0 0">Dashed line: your monthly goal ('+(ui.metric==='co2'?fk(S.goalKg)+' kg':'EGP '+fe(S.goalEgp))+').</p></div>';
+    h += '<div class="plan">'+months.map(function(m, i){
+      var t = monthTotal(m), now = !pi.before && !pi.after && i===pi.i;
+      return '<div class="pm'+(now?' now':'')+'"><div class="n">'+(i+1)+'</div><div><b>'+esc(THEMES[i][0])+' <span class="muted small">'+esc(monthLabel(m))+'</span></b><div class="nums">'+fk(t.kg)+' kg CO₂e · EGP '+fe(t.egp)+' · '+t.days+' days</div></div></div>';
+    }).join('')+'</div>';
+    h += '<h2 style="margin:22px 0 4px">All time</h2><div class="eq">' +
+      '<div><div class="muted small">CO₂e saved</div><div class="big">'+fk(tot.kg)+' kg</div></div>' +
+      '<div><div class="muted small">Money saved</div><div class="big">EGP '+fe(tot.egp)+'</div></div>' +
+      '<div><div class="muted small">Same as driving alone</div><div class="big">'+Math.round(tot.kg/kmKg()).toLocaleString('en-US')+' km</div></div>' +
+      '<div><div class="muted small">Same as petrol not burned</div><div class="big">'+fk(tot.kg/C.co2L)+' L</div></div></div>';
+    h += '<p class="muted small" style="margin-top:12px">'+tot.days+' day'+(tot.days===1?'':'s')+' with savings logged. 1,000 kg is one tonne of CO₂e, the unit of one carbon credit. Your own cuts are real reductions, but they are not credits.</p>';
+    return h;
+  }
+  function renderMore(){
+    var h = '<h2 style="margin:8px 0 4px">Settings and backup</h2>';
+    h += '<div class="card"><h3>About you</h3><div class="form">' +
+      '<div class="fr"><label for="s-track">I am a</label><select class="input" id="s-track" data-set="track">'+Object.keys(TRACKS).map(function(t){ return '<option value="'+t+'"'+(S.track===t?' selected':'')+'>'+esc(TRACKS[t].label)+'</option>'; }).join('')+'</select></div>' +
+      '<div class="two"><div class="fr"><label for="s-gkg">Monthly goal, kg CO₂e</label><input class="input" id="s-gkg" type="number" inputmode="decimal" min="0" data-set="goalKg" value="'+esc(S.goalKg)+'"></div>' +
+      '<div class="fr"><label for="s-gegp">Monthly goal, EGP</label><input class="input" id="s-gegp" type="number" inputmode="decimal" min="0" data-set="goalEgp" value="'+esc(S.goalEgp)+'"></div></div>' +
+      '<div class="fr"><label for="s-start">My plan starts on</label><input class="input" id="s-start" type="date" data-set="planStart" value="'+esc(S.planStart)+'"></div>' +
+      '<p class="muted small" style="margin:0">Choosing a type resets the goals to the typical monthly savings in the plan. You can then change them.</p></div></div>';
+    h += '<div class="card"><h3>Prices and factors</h3><div class="form"><div class="two">' +
+      '<div class="fr"><label for="s-elec">Electricity, EGP per kWh</label><input class="input" id="s-elec" type="number" inputmode="decimal" step="0.01" min="0" data-set="elec" value="'+esc(S.elec)+'"></div>' +
+      '<div class="fr"><label for="s-petrol">Petrol, EGP per litre</label><input class="input" id="s-petrol" type="number" inputmode="decimal" step="0.05" min="0" data-set="petrol" value="'+esc(S.petrol)+'"></div>' +
+      '<div class="fr"><label for="s-grid">Grid, kg CO₂e per kWh</label><input class="input" id="s-grid" type="number" inputmode="decimal" step="0.001" min="0" data-set="grid" value="'+esc(S.grid)+'"></div>' +
+      '<div class="fr"><label for="s-l100">Car, litres per 100 km</label><input class="input" id="s-l100" type="number" inputmode="decimal" step="0.1" min="0" data-set="lper100" value="'+esc(S.lper100)+'"></div>' +
+      '<div class="fr"><label for="s-trip">Usual round trip, km</label><input class="input" id="s-trip" type="number" inputmode="decimal" step="1" min="0" data-set="tripKm" value="'+esc(S.tripKm)+'"></div></div>' +
+      '<p class="muted small" style="margin:0">Defaults: Egypt grid 0.442 kg per kWh (2025), household electricity EGP 1.95 per kWh, petrol 92 at EGP 22.25 per litre (October 2026), petrol at 2.31 kg CO₂ per litre. Changing a value updates all days, past and future.</p></div></div>';
+    var code = JSON.stringify({ v:1, S:S, D:D });
+    h += '<div class="card"><h3>Backup and restore</h3><p class="muted small" style="margin:6px 0 0">Your log is saved in this browser on this device. Copy your backup code and keep it somewhere safe. Paste it in another browser to restore it.</p>' +
+      '<div class="form"><div class="fr"><label for="s-code">My backup code</label><textarea class="input" id="s-code" readonly>'+esc(code)+'</textarea></div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="copycode">Copy backup code</button><button class="btn alt" data-act="copycsv">Copy as table (CSV)</button></div>' +
+      '<div class="fr"><label for="s-restore">Restore from a backup code</label><textarea class="input" id="s-restore" placeholder="Paste a backup code here"></textarea></div>' +
+      '<div><button class="btn alt" data-act="restore">'+(ui.confirm==='restore'?'Tap again to replace my log':'Restore')+'</button></div></div></div>';
+    h += '<div class="card"><h3>Start again</h3><p class="muted small" style="margin:6px 0 10px">Removes every day you have logged and the example days.</p><button class="btn '+(ui.confirm==='reset'?'warn':'alt')+'" data-act="reset">'+(ui.confirm==='reset'?'Tap again to erase everything':'Erase my log')+'</button></div>';
+    if(ui.msg) h += '<div class="notice '+(ui.msgBad?'bad':'good')+'" role="status">'+esc(ui.msg)+'</div>';
+    if(memOnly) h += '<div class="notice bad">This browser is not saving data. Copy your backup code before you leave.</div>';
+    h += '<p class="muted small" style="margin-top:16px">Built for the Heliopolis University six-month plan, SEKEM Vision Goal 9: Active Climate Change Mitigation. Savings are estimates. Prices are from October 2026.</p>';
+    return h;
+  }
+  function render(keepScroll){
+    var app = document.querySelector('#app');
+    var y = keepScroll ? window.scrollY : 0;
+    app.innerHTML = ui.tab==='today' ? renderToday() : ui.tab==='month' ? renderMonth() : ui.tab==='progress' ? renderProgress() : renderMore();
+    document.querySelector('#tabs').innerHTML = tabsHTML();
+    var s = streak(), se = document.querySelector('#streak');
+    se.textContent = s>0 ? s+' day streak' : 'Log a saving today';
+    if(!keepScroll) window.scrollTo(0, 0); else window.scrollTo(0, y);
+  }
+
+  /* ---------- actions ---------- */
+  function sel(){ return ui.sel || todayKey(); }
+  function dayRef(){ var k = sel(); if(!D[k]) D[k] = {}; return D[k]; }
+  function cleanDay(k){
+    var d = D[k]; if(!d) return;
+    var keys = Object.keys(d).filter(function(x){ return x!=='ex'; });
+    var empty = keys.every(function(x){ var v = d[x]; if(x==='trip') return !v || !v.m; return !v; });
+    if(empty) delete D[k];
+  }
+  function setField(f, val, checked){
+    var d = dayRef(); delete d.ex;
+    if(['led','standby','ac','smooth'].indexOf(f)>-1) d[f] = !!checked;
+    else if(f==='tripm'){ var km = d.trip ? d.trip.km : S.tripKm; d.trip = val ? { m:val, km:km } : null; }
+    else if(f==='tripkm'){ var m = d.trip ? d.trip.m : ''; if(m) d.trip = { m:m, km:num(val) }; else if(!d.trip) { /* no method chosen yet */ } }
+    else d[f] = num(val);
+    cleanDay(sel()); save(); render(true);
+  }
+  function step(id, dir){
+    var d = dayRef(); delete d.ex; var h = HAB.filter(function(x){ return x.id===id; })[0];
+    d[id] = Math.max(0, num(d[id]) + dir*h.step); cleanDay(sel()); save(); render(true);
+  }
+  function setSetting(k, v){
+    if(k==='track'){ S.track = v; S.goalKg = TRACKS[v].kg; S.goalEgp = TRACKS[v].egp; }
+    else if(k==='planStart'){ if(/^\d{4}-\d{2}-\d{2}$/.test(v)) S.planStart = v; }
+    else { var n = +v; if(isFinite(n) && n>=0) S[k] = n; }
+    save(); render(true);
+  }
+  function copy(text, okMsg){
+    function done(){ ui.msg = okMsg; ui.msgBad = false; render(true); }
+    function fail(){
+      var ta = document.querySelector('#s-code'); if(ta){ ta.focus(); ta.select(); }
+      ui.msg = 'Copy was blocked. The text is selected: copy it with your keyboard or menu.'; ui.msgBad = true; render(true);
+      var t2 = document.querySelector('#s-code'); if(t2){ t2.focus(); t2.select(); }
+    }
+    try { navigator.clipboard.writeText(text).then(done, fail); } catch(e){ fail(); }
+  }
+  function csv(){
+    var rows = ['date,co2e_kg,egp'], keys = Object.keys(D).sort();
+    keys.forEach(function(k){ var t = dayTotal(k); rows.push(k+','+t.kg.toFixed(3)+','+t.egp.toFixed(2)); });
+    return rows.join('\n');
+  }
+  function restore(){
+    var box = document.querySelector('#s-restore'), txt = box ? box.value.trim() : '';
+    if(!txt){ ui.msg = 'Paste a backup code first.'; ui.msgBad = true; render(true); return; }
+    var o = null; try { o = JSON.parse(txt); } catch(e){ o = null; }
+    if(!o || !o.S || !o.D || typeof o.D!=='object'){ ui.msg = 'That does not look like a backup code.'; ui.msgBad = true; ui.confirm = ''; render(true); return; }
+    if(ui.confirm!=='restore'){ ui.confirm = 'restore'; render(true); var b = document.querySelector('#s-restore'); if(b) b.value = txt; return; }
+    S = Object.assign(defaults(), o.S); D = o.D; ui.demo = false; ui.confirm = ''; ui.msg = 'Restored your log.'; ui.msgBad = false; save(); render(true);
+  }
+  function startOwn(){
+    Object.keys(D).forEach(function(k){ if(D[k] && D[k].ex) delete D[k]; });
+    ui.demo = false; save(); render();
+  }
+  function reset(){
+    if(ui.confirm!=='reset'){ ui.confirm = 'reset'; render(true); return; }
+    D = {}; ui.demo = false; ui.confirm = ''; ui.msg = 'Your log is empty. Start fresh today.'; ui.msgBad = false; save(); render(true);
+  }
+  function act(a, v, el){
+    if(a!=='reset' && ui.confirm==='reset') ui.confirm = '';
+    if(a!=='restore' && ui.confirm==='restore') ui.confirm = '';
+    if(a==='tab'){ ui.tab = v; ui.msg = ''; if(v==='month') ui.month = monthOf(sel()); render(); }
+    else if(a==='prev'){ ui.sel = addDays(sel(), -1); render(); }
+    else if(a==='next'){ ui.sel = addDays(sel(), 1); render(); }
+    else if(a==='gotoday'){ ui.sel = null; render(); }
+    else if(a==='pm'){ ui.month = addMonths(ui.month || monthOf(sel()), -1); render(true); }
+    else if(a==='nm'){ ui.month = addMonths(ui.month || monthOf(sel()), 1); render(true); }
+    else if(a==='pickday'){ ui.sel = v; ui.tab = 'today'; render(); }
+    else if(a==='metric'){ ui.metric = v; render(true); }
+    else if(a==='inc'){ step(el.getAttribute('data-id'), 1); }
+    else if(a==='dec'){ step(el.getAttribute('data-id'), -1); }
+    else if(a==='startOwn'){ startOwn(); }
+    else if(a==='copycode'){ copy(JSON.stringify({ v:1, S:S, D:D }), 'Backup code copied.'); }
+    else if(a==='copycsv'){ copy(csv(), 'Table copied. Paste it into a spreadsheet.'); }
+    else if(a==='restore'){ restore(); }
+    else if(a==='reset'){ reset(); }
+  }
+  document.addEventListener('click', function(e){
+    var b = e.target.closest('[data-act]'); if(!b || b.disabled) return;
+    act(b.getAttribute('data-act'), b.getAttribute('data-v'), b);
+  });
+  document.addEventListener('change', function(e){
+    var t = e.target; if(!t || !t.getAttribute) return;
+    var f = t.getAttribute('data-field'), s = t.getAttribute('data-set');
+    if(f){ setField(f, t.value, t.checked); }
+    else if(s){ setSetting(s, t.value); }
+  });
+  load();
+  render();
+  window.__cct = { parts:parts, monthTotal:monthTotal, allTotal:allTotal, streak:streak, S:function(){ return S; }, D:function(){ return D; }, act:act, setField:setField, setSetting:setSetting, ui:ui, todayKey:todayKey };
+})();
+</script>
+
+</body></html>
